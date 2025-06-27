@@ -12,10 +12,10 @@ A minimal command-line shell written in C, inspired by Stephen Brennan’s [Writ
 - Displays a prompt showing the current working directory
 - Input is parsed into tokens using `strtok`
 - Makefile included for easy compilation
+- Command history with arrow key navigation
 
 ## Planned Features
 
-- Command history with arrow key navigation
 - Line editing (backspace, cursor movement)
 - Command chaining with `&&`, `||`, and `;`
 - Input and output redirection (`<`, `>`, `>>`)
