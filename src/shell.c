@@ -6,16 +6,13 @@
 #include <string.h>
 #include <libgen.h>
 
-#define GSH_RL_BUFSIZE 1024
-#define GSH_TOK_BUFSIZE 64
-#define GSH_TOK_DELIM " \t\r\n\a"
+#include "shell.h"
 
-/*
-  Function Declarations for builtin shell commands:
- */
-int gsh_cd(char **args);
-int gsh_help(char **args);
-int gsh_exit(char **args);
+/* Global declartion function */
+char *history[HISTORY_SIZE];
+int history_head = 0;    // where to store next
+int history_size = 0;    // number of commands stored (max = HISTORY_SIZE)
+int history_index = -1;  // for arrow key navigation
 
 /*
   List of builtin commands, followed by their corresponding functions.
@@ -67,7 +64,12 @@ int gsh_cd(char **args)
 int gsh_help(char **args)
 {
   int i;
-  printf("Giri Kishore's shell\n");
+  printf("Giri Kishore's shell \n");
+
+  if (sizeof(args) > 8 ) {
+    printf("help command does not support arguments\n");
+  }
+
   printf("Type program names and arguments, and hit enter.\n");
   printf("Built-in progams are below:\n");
 
@@ -81,46 +83,114 @@ int gsh_help(char **args)
 
 int gsh_exit(char **args)
 {
+  if (sizeof(args) > 8) {
+    printf("exit command does not support arguments\n");
+  }
   return 0;
 }
 
 char *gsh_read_line(void)
 {
-  int bufsize = GSH_RL_BUFSIZE;
-  int position = 0;
-  char *buffer = malloc(sizeof(char) * bufsize);
-  int c;
+    int bufsize = GSH_RL_BUFSIZE;
+    int position = 0;
+    char *buffer = malloc(sizeof(char) * bufsize);
+    int c;
 
-  if (!buffer) {
-    fprintf(stderr, "gsh: allocation error\n");
-    exit(EXIT_FAILURE);
-  }
+    struct termios original_term;
+    enable_raw_mode(&original_term);
 
-  while (1) {
-    // Read a character
-    c = getchar();
-
-    // If we hit EOF, replace it with a null character and return.
-    if (c == EOF || c == '\n') {
-      buffer[position] = '\0';
-      return buffer;
-    } 
-    else {
-      buffer[position] = c;
-    }
-    position++;
-
-    // If we have exceeded the buffer, reallocate.
-    if (position >= bufsize) {
-      bufsize += GSH_RL_BUFSIZE;
-      buffer = realloc(buffer, bufsize);
-      if (!buffer) {
+    if (!buffer) {
         fprintf(stderr, "gsh: allocation error\n");
         exit(EXIT_FAILURE);
-      }
     }
-  }
+
+    while (1) {
+      c = getchar();
+      if (c == '\x1b') { // ESC
+        char seq[2];
+        seq[0] = getchar();
+        seq[1] = getchar();
+
+        if (seq[0] == '[') {
+          if (seq[1] == 'A') {
+            if (history_size > 0) {
+              if (history_index < history_size - 1) {
+                history_index++;
+              }
+              
+              int idx = (history_head + HISTORY_SIZE - 1 - history_index) % HISTORY_SIZE;
+              strcpy(buffer, history[idx]);
+              position = strlen(buffer);
+                
+              // Clear line and reprint prompt + buffer
+              printf("\33[2K\r%s > %s", getcwd(NULL, 0), buffer);
+            }
+          } 
+          else if (seq[1] == 'B') {
+            if (history_index > 0) {
+              history_index--;
+              int idx = (history_head + HISTORY_SIZE - 1 - history_index) % HISTORY_SIZE;
+              strcpy(buffer, history[idx]);
+              position = strlen(buffer);
+            } 
+            else {
+              // No more recent command — clear the buffer
+              history_index = -1;
+              buffer[0] = '\0';
+              position = 0;
+            }
+            
+            // Clear line and print prompt + buffer
+            printf("\33[2K\r%s > %s", getcwd(NULL, 0), buffer);
+            fflush(stdout);
+          }
+        }
+        continue;
+      }
+
+      if (c == '\n') {
+        if (strcmp(buffer, "\n") != 0) {
+          if (history[history_head]) {
+            free(history[history_head]);
+          }
+          history[history_head] = strdup(buffer);
+          history_head = (history_head + 1) % HISTORY_SIZE;
+        
+          if (history_size < HISTORY_SIZE) {
+            history_size++;
+          }
+        }
+            
+        buffer[position] = '\0';
+        printf("\n");
+        break;
+      } 
+      else if (c == 127 || c == '\b') {  // handle backspace
+        if (position > 0) {
+          position--;
+          printf("\b \b");
+        }
+      } 
+      else {
+        buffer[position++] = c;
+        putchar(c);
+      }
+
+      if (position >= bufsize) {
+        bufsize += GSH_RL_BUFSIZE;
+        buffer = realloc(buffer, bufsize);
+        if (!buffer) {
+          fprintf(stderr, "gsh: allocation error\n");
+          exit(EXIT_FAILURE);
+        }
+      }
+      
+    }
+
+    disable_raw_mode(&original_term);
+    return buffer;
 }
+
 
 char **gsh_split_line(char *line)
 {
@@ -155,7 +225,7 @@ char **gsh_split_line(char *line)
 
 int gsh_launch(char **args)
 {
-  pid_t pid, wpid;
+  pid_t pid;
   int status;
 
   pid = fork();
@@ -171,7 +241,7 @@ int gsh_launch(char **args)
   } else {
     // Parent process
     do {
-      wpid = waitpid(pid, &status, WUNTRACED);
+      waitpid(pid, &status, WUNTRACED);
     } while (!WIFEXITED(status) && !WIFSIGNALED(status));
   }
 
@@ -215,8 +285,9 @@ void gsh_loop(void)
 }
 
 
-int main(int argc, char **argv)
+int main()
 {
+
   // Run command loop.
   gsh_loop();
 
