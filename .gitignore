@@ -1,2 +1,4 @@
 gsh
 *.o
+**/gsh.dSYM/
+**/.vscode/
