@@ -149,6 +149,7 @@ char *gsh_read_line(void)
       }
 
       if (c == '\n') {
+        buffer[position] = '\0';
         if (strcmp(buffer, "\n") != 0) {
           if (history[history_head]) {
             free(history[history_head]);
@@ -160,8 +161,6 @@ char *gsh_read_line(void)
             history_size++;
           }
         }
-            
-        buffer[position] = '\0';
         printf("\n");
         break;
       } 

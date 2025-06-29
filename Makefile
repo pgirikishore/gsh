@@ -3,7 +3,8 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -g
 TARGET = gsh
-SRC = ./src/shell.c ./src/input.c
+SRC :=  ./src/shell.c \
+		./src/input.c
 
 all: $(TARGET)
 

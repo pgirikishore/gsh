@@ -30,3 +30,12 @@ To compile the shell:
 
 ```bash
 make
+```
+
+## Run gsh
+
+To run the shell
+
+```bash
+./gsh
+```
